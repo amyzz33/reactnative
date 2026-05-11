@@ -1,233 +1,577 @@
-/**
- * Comments modal component for Bikers Hub
- * Shows threaded comments for a post with ability to add new ones
- */
+// PostCard.js
+// React Native CLI version (NOT Expo)
 
-import { api } from '../utils/api.js';
-import { getCurrentUser } from '../utils/auth.js';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
 
-let currentPostId = null;
+import { getCurrentUser } from '../utils/auth';
 
-/**
- * Open comments modal for a post
- * @param {string} postId
- */
-export function openComments(postId) {
-  currentPostId = postId;
+/* ---------------- Icons ---------------- */
 
-  // Remove existing modal if any
-  closeComments();
+// npm install react-native-vector-icons
+import Icon from 'react-native-vector-icons/Feather';
 
-  const overlay = document.createElement('div');
-  overlay.id = 'comments-overlay';
-  overlay.innerHTML = `
-    <style>
-      #comments-overlay {
-        position: fixed; inset: 0; z-index: 200;
-        background: rgba(0,0,0,0.6); display: flex;
-        flex-direction: column; justify-content: flex-end;
-      }
-      .comments-sheet {
-        background: #0d1117; border-radius: 20px 20px 0 0;
-        max-height: 70vh; display: flex; flex-direction: column;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-      }
-      .comments-header {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 16px 20px; border-bottom: 1px solid #1f2937;
-      }
-      .comments-title {
-        font-family: 'Exo 2', sans-serif; font-weight: 700; font-size: 16px; color: #f9fafb;
-      }
-      .comments-close {
-        background: none; border: none; color: #9ca3af; cursor: pointer;
-        font-size: 24px; padding: 0 4px; line-height: 1;
-      }
-      .comments-list {
-        flex: 1; overflow-y: auto; padding: 12px 20px;
-        min-height: 120px;
-      }
-      .comment-item {
-        display: flex; gap: 10px; margin-bottom: 16px;
-      }
-      .comment-avatar {
-        width: 32px; height: 32px; border-radius: 50%; background: #374151;
-        flex-shrink: 0; object-fit: cover;
-      }
-      .comment-body { flex: 1; min-width: 0; }
-      .comment-author {
-        font-weight: 700; font-size: 13px; color: #f9fafb;
-        margin-right: 6px;
-      }
-      .comment-text { font-size: 14px; color: #d1d5db; line-height: 1.4; }
-      .comment-meta { font-size: 11px; color: #6b7280; margin-top: 4px; }
-      .comment-deleted { font-style: italic; color: #6b7280; }
-      .comments-input-bar {
-        display: flex; gap: 8px; padding: 12px 16px;
-        border-top: 1px solid #1f2937;
-      }
-      .comments-input {
-        flex: 1; background: #1f2937; border: none; border-radius: 24px;
-        padding: 10px 16px; color: #f9fafb; font-family: 'Nunito', sans-serif;
-        font-size: 14px; outline: none;
-      }
-      .comments-send {
-        width: 40px; height: 40px; border-radius: 50%; background: #E53935;
-        border: none; cursor: pointer; display: flex; align-items: center;
-        justify-content: center; flex-shrink: 0;
-      }
-      .comments-send:disabled { opacity: 0.5; }
-      .comments-empty {
-        text-align: center; padding: 32px 0; color: #6b7280; font-size: 14px;
-      }
-    </style>
+/* ---------------- Helpers ---------------- */
 
-    <div class="comments-sheet">
-      <div class="comments-header">
-        <div class="comments-title">Comments</div>
-        <button class="comments-close" id="comments-close-btn">×</button>
-      </div>
-      <div class="comments-list" id="comments-list">
-        <div style="text-align: center; padding: 32px 0; color: #6b7280;">Loading...</div>
-      </div>
-      <div class="comments-input-bar">
-        <input class="comments-input" id="comment-input" placeholder="Add a comment..." autocomplete="off">
-        <button class="comments-send" id="comment-send-btn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
-            <line x1="22" y1="2" x2="11" y2="13"/>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  `;
+export function timeAgo(dateStr) {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
 
-  document.body.appendChild(overlay);
+  const diffMs = now - then;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
 
-  // Close on overlay click (not sheet)
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeComments();
-  });
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m`;
+  if (diffHr < 24) return `${diffHr} hr`;
+  if (diffDay < 7) return `${diffDay}d`;
 
-  document.getElementById('comments-close-btn').addEventListener('click', closeComments);
-
-  // Send comment
-  const sendBtn = document.getElementById('comment-send-btn');
-  const inputEl = document.getElementById('comment-input');
-
-  sendBtn.addEventListener('click', () => submitComment());
-  inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      submitComment();
+  return new Date(dateStr).toLocaleDateString(
+    'en-US',
+    {
+      month: 'short',
+      day: 'numeric',
     }
-  });
-
-  loadComments();
+  );
 }
 
-export function closeComments() {
-  const existing = document.getElementById('comments-overlay');
-  if (existing) existing.remove();
-  currentPostId = null;
-}
+export function formatCount(n) {
+  if (n == null) return '0';
 
-async function loadComments() {
-  const container = document.getElementById('comments-list');
-  if (!container || !currentPostId) return;
+  if (n < 1000) return String(n);
 
-  try {
-    const res = await api.get(`/api/comments/${currentPostId}?page=1&limit=50`);
-
-    let comments = [];
-    if (res.success && Array.isArray(res.data)) {
-      comments = res.data;
-    } else if (res.success && res.data && Array.isArray(res.data.comments)) {
-      comments = res.data.comments;
-    }
-
-    if (comments.length === 0) {
-      container.innerHTML = '<div class="comments-empty">No comments yet. Be the first!</div>';
-      return;
-    }
-
-    container.innerHTML = comments.map((c) => {
-      const author = c.author || {};
-      const rawPic = author.profilePic;
-      const pic = rawPic ? (typeof rawPic === 'string' ? rawPic : rawPic.url || '') : '';
-      const avatarHtml = pic
-        ? `<img class="comment-avatar" src="${pic}" alt="${author.username}">`
-        : `<div class="comment-avatar"></div>`;
-
-      if (c.isDeleted) {
-        return `
-          <div class="comment-item">
-            <div class="comment-avatar"></div>
-            <div class="comment-body">
-              <span class="comment-deleted">[deleted]</span>
-            </div>
-          </div>
-        `;
-      }
-
-      const timeAgo = formatTimeAgo(c.createdAt);
-      const likesCount = Array.isArray(c.likes) ? c.likes.length : 0;
-
-      return `
-        <div class="comment-item">
-          ${avatarHtml}
-          <div class="comment-body">
-            <span class="comment-author">${author.username || 'Unknown'}</span>
-            <span class="comment-text">${escapeHtml(c.content || '')}</span>
-            <div class="comment-meta">${timeAgo}${likesCount > 0 ? ` · ${likesCount} likes` : ''}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch {
-    container.innerHTML = '<div class="comments-empty" style="color: #ef4444;">Failed to load comments</div>';
+  if (n < 1000000) {
+    return (n / 1000).toFixed(1) + ' K';
   }
+
+  return (n / 1000000).toFixed(1) + ' M';
 }
 
-async function submitComment() {
-  const inputEl = document.getElementById('comment-input');
-  const sendBtn = document.getElementById('comment-send-btn');
-  if (!inputEl || !currentPostId) return;
+function pollClosesText(poll) {
+  if (poll.closed) return 'Poll closed';
 
-  const content = inputEl.value.trim();
-  if (!content) return;
+  if (!poll.closesAt) return null;
 
-  inputEl.value = '';
-  sendBtn.disabled = true;
+  const ms =
+    new Date(poll.closesAt).getTime() -
+    Date.now();
 
-  try {
-    const res = await api.post(`/api/comments/${currentPostId}`, { content });
-    if (res.success) {
-      loadComments(); // Reload
-    }
-  } catch {
-    inputEl.value = content; // Restore on error
-  } finally {
-    sendBtn.disabled = false;
-    inputEl.focus();
-  }
-}
+  if (ms <= 0) return 'Poll closed';
 
-function formatTimeAgo(dateStr) {
-  if (!dateStr) return '';
-  const diffMs = Date.now() - new Date(dateStr).getTime();
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return 'now';
-  if (min < 60) return `${min}m`;
+  const min = Math.floor(ms / 60000);
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
   const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  if (day >= 1) {
+    return `Closes in ${day} day${
+      day > 1 ? 's' : ''
+    }`;
+  }
+
+  if (hr >= 1) {
+    return `Closes in ${hr} hour${
+      hr > 1 ? 's' : ''
+    }`;
+  }
+
+  return `Closes in ${min} min`;
 }
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
+/* ---------------- Poll Block ---------------- */
+
+const PollBlock = ({
+  post,
+  onVote,
+}) => {
+  if (
+    !post?.poll ||
+    !Array.isArray(post.poll.options) ||
+    post.poll.options.length === 0
+  ) {
+    return null;
+  }
+
+  const poll = post.poll;
+
+  const currentUser = getCurrentUser();
+
+  const myId = currentUser?.id
+    ? String(currentUser.id)
+    : null;
+
+  const isExpired =
+    poll.closed ||
+    (poll.closesAt &&
+      new Date(poll.closesAt).getTime() <=
+        Date.now());
+
+  const totalVotes = poll.options.reduce(
+    (sum, o) =>
+      sum +
+      (Array.isArray(o.votes)
+        ? o.votes.length
+        : 0),
+    0
+  );
+
+  return (
+    <View style={styles.pollBlock}>
+      {poll.options.map((opt) => {
+        const count = Array.isArray(opt.votes)
+          ? opt.votes.length
+          : 0;
+
+        const pct = totalVotes
+          ? Math.round(
+              (count / totalVotes) * 100
+            )
+          : 0;
+
+        const myVote =
+          myId &&
+          Array.isArray(opt.votes) &&
+          opt.votes.some(
+            (v) =>
+              String(v?._id || v) === myId
+          );
+
+        return (
+          <TouchableOpacity
+            key={opt._id || opt.id}
+            disabled={isExpired}
+            onPress={() =>
+              onVote?.(
+                post._id,
+                opt._id || opt.id
+              )
+            }
+            style={[
+              styles.pollOption,
+              myVote &&
+                styles.pollOptionVoted,
+              isExpired &&
+                styles.pollOptionClosed,
+            ]}
+          >
+            <View
+              style={[
+                styles.pollFill,
+                {
+                  width: `${pct}%`,
+                },
+              ]}
+            />
+
+            <View
+              style={
+                styles.pollOptionRow
+              }
+            >
+              <Text
+                style={
+                  styles.pollOptionLabel
+                }
+              >
+                {myVote ? '★ ' : ''}
+                {opt.label}
+              </Text>
+
+              <Text
+                style={
+                  styles.pollOptionPct
+                }
+              >
+                {pct}%
+              </Text>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+
+      <Text style={styles.pollMeta}>
+        {`${totalVotes} vote${
+          totalVotes === 1 ? '' : 's'
+        }`}
+        {poll.multiSelect
+          ? ' · multi-choice'
+          : ''}
+        {pollClosesText(poll)
+          ? ` · ${pollClosesText(poll)}`
+          : ''}
+      </Text>
+    </View>
+  );
+};
+
+/* ---------------- Main Component ---------------- */
+
+const PostCard = ({
+  post,
+  onLike,
+  onComment,
+  onShare,
+  onPressComments,
+  onPressUser,
+  onVote,
+}) => {
+  const author = post.author || {};
+
+  const username =
+    author.username || 'unknown';
+
+  const rawPic = author.profilePic;
+
+  const avatarUrl = rawPic
+    ? typeof rawPic === 'string'
+      ? rawPic
+      : rawPic.url || ''
+    : '';
+
+  const time = timeAgo(post.createdAt);
+
+  const currentUser = getCurrentUser();
+
+  const isLiked =
+    currentUser &&
+    Array.isArray(post.likes) &&
+    post.likes.includes(currentUser.id);
+
+  const likesCount =
+    post.likesCount != null
+      ? post.likesCount
+      : Array.isArray(post.likes)
+      ? post.likes.length
+      : 0;
+
+  const commentsCount =
+    post.commentsCount || 0;
+
+  const mediaItem =
+    Array.isArray(post.media) &&
+    post.media.length > 0
+      ? post.media[0]
+      : null;
+
+  const content = post.content || '';
+
+  const truncated =
+    content.length > 150
+      ? content.slice(0, 150) + '...'
+      : content;
+
+  return (
+    <View style={styles.card}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.authorRow}
+          onPress={() =>
+            onPressUser?.(author)
+          }
+        >
+          {avatarUrl ? (
+            <Image
+              source={{
+                uri: avatarUrl,
+              }}
+              style={styles.avatar}
+            />
+          ) : (
+            <View
+              style={
+                styles.avatarPlaceholder
+              }
+            />
+          )}
+
+          <Text style={styles.author}>
+            {username}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.time}>
+          · {time}
+        </Text>
+      </View>
+
+      {/* Image */}
+      {mediaItem ? (
+        <Image
+          source={{
+            uri: mediaItem.url,
+          }}
+          style={styles.postImage}
+          resizeMode="cover"
+        />
+      ) : !post.poll ? (
+        <View
+          style={styles.imagePlaceholder}
+        />
+      ) : null}
+
+      {/* Poll */}
+      <PollBlock
+        post={post}
+        onVote={onVote}
+      />
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() =>
+            onLike?.(post)
+          }
+        >
+          <Icon
+            name="heart"
+            size={22}
+            color={
+              isLiked
+                ? '#E53935'
+                : '#ffffff'
+            }
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() =>
+            onComment?.(post)
+          }
+        >
+          <Icon
+            name="message-circle"
+            size={22}
+            color="#ffffff"
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() =>
+            onShare?.(post)
+          }
+        >
+          <Icon
+            name="send"
+            size={22}
+            color="#ffffff"
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Likes */}
+      <Text style={styles.likes}>
+        {formatCount(likesCount)} likes
+      </Text>
+
+      {/* Caption */}
+      {content ? (
+        <Text style={styles.caption}>
+          <Text style={styles.captionUser}>
+            {username}{' '}
+          </Text>
+
+          {truncated}
+
+          {content.length > 150 && (
+            <Text
+              style={styles.readMore}
+            >
+              {' '}
+              read more...
+            </Text>
+          )}
+        </Text>
+      ) : null}
+
+      {/* Comments Link */}
+      {commentsCount > 0 && (
+        <TouchableOpacity
+          onPress={() =>
+            onPressComments?.(post)
+          }
+        >
+          <Text
+            style={styles.commentsLink}
+          >
+            View all{' '}
+            {formatCount(commentsCount)}{' '}
+            comments
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
+export default PostCard;
+
+/* ---------------- Styles ---------------- */
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#111827',
+    marginBottom: 18,
+    paddingBottom: 14,
+  },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginRight: 10,
+  },
+
+  avatarPlaceholder: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginRight: 10,
+    backgroundColor: '#374151',
+  },
+
+  author: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
+  time: {
+    color: '#9ca3af',
+    marginLeft: 8,
+    fontSize: 12,
+  },
+
+  postImage: {
+    width: '100%',
+    height: 380,
+    backgroundColor: '#1f2937',
+  },
+
+  imagePlaceholder: {
+    width: '100%',
+    height: 380,
+    backgroundColor: '#1f2937',
+  },
+
+  actions: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+
+  actionBtn: {
+    marginRight: 18,
+  },
+
+  likes: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+    paddingHorizontal: 14,
+    marginTop: 8,
+  },
+
+  caption: {
+    color: '#d1d5db',
+    fontSize: 14,
+    lineHeight: 20,
+    paddingHorizontal: 14,
+    marginTop: 6,
+  },
+
+  captionUser: {
+    fontWeight: '700',
+    color: '#fff',
+  },
+
+  readMore: {
+    color: '#9ca3af',
+  },
+
+  commentsLink: {
+    color: '#6b7280',
+    fontSize: 13,
+    paddingHorizontal: 14,
+    marginTop: 8,
+  },
+
+  /* Poll */
+
+  pollBlock: {
+    paddingHorizontal: 14,
+    paddingTop: 14,
+  },
+
+  pollOption: {
+    backgroundColor: '#1f2937',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 10,
+    position: 'relative',
+  },
+
+  pollOptionVoted: {
+    borderWidth: 1,
+    borderColor: '#E53935',
+  },
+
+  pollOptionClosed: {
+    opacity: 0.7,
+  },
+
+  pollFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#374151',
+  },
+
+  pollOptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+
+  pollOptionLabel: {
+    color: '#fff',
+    fontSize: 14,
+    zIndex: 2,
+  },
+
+  pollOptionPct: {
+    color: '#d1d5db',
+    fontWeight: '700',
+    zIndex: 2,
+  },
+
+  pollMeta: {
+    color: '#6b7280',
+    fontSize: 12,
+    marginTop: 8,
+  },
+});
