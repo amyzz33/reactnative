@@ -1,47 +1,138 @@
-/**
- * Club card component for Bikers Hub
- * Renders a club card for horizontal scroll sections
- */
+// ClubCard.js
+// React Native version of the Bikers Hub club card component (without Expo)
 
-import { formatCount } from './post-card.js';
+import React from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ImageBackground,
+  StyleSheet,
+} from 'react-native';
 
-const PLACEHOLDER_BG = 'linear-gradient(135deg, #1f2937, #374151)';
+// Replace with your own helper if needed
+const formatCount = (count) => {
+  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+  return `${count}`;
+};
 
-/**
- * Render a club card HTML string
- * @param {object} club - Club object from API
- * @param {'discover'|'manage'} mode - Card display mode
- * @returns {string} HTML string
- */
-export function renderClubCard(club, mode) {
-  const coverImage = club.coverImage;
-  const bgStyle = coverImage
-    ? `background-image: url('${coverImage}')`
-    : `background-image: ${PLACEHOLDER_BG}`;
+const PLACEHOLDER_COLORS = ['#1f2937', '#374151'];
 
-  const name = club.name || 'Unnamed Club';
+const ClubCard = ({ club, mode = 'discover', onPress, onJoin }) => {
+  const coverImage = club?.coverImage;
+  const name = club?.name || 'Unnamed Club';
 
-  if (mode === 'manage') {
-    return `
-      <div class="club-card" data-club-id="${club._id}" style="${bgStyle}; cursor: pointer;">
-        <div class="club-card-overlay">
-          <div class="club-card-name">${name}</div>
-        </div>
-      </div>
-    `;
-  }
+  const privacy = club?.privacy || 'public';
 
-  // discover mode (default)
-  const privacy = club.privacy || 'public';
-  const membersCount = club.membersCount != null ? club.membersCount : (Array.isArray(club.members) ? club.members.length : 0);
+  const membersCount =
+    club?.membersCount != null
+      ? club.membersCount
+      : Array.isArray(club?.members)
+      ? club.members.length
+      : 0;
 
-  return `
-    <div class="club-card" data-club-id="${club._id}" style="${bgStyle}; cursor: pointer;">
-      <div class="club-card-overlay">
-        <div class="club-card-name">${name}</div>
-        <div class="club-card-meta">${privacy} &middot; ${formatCount(membersCount)}</div>
-        <button class="club-card-join" data-club-id="${club._id}">Join</button>
-      </div>
-    </div>
-  `;
-}
+  const CardContent = () => (
+    <View style={styles.overlay}>
+      <Text style={styles.name}>{name}</Text>
+
+      {mode !== 'manage' && (
+        <>
+          <Text style={styles.meta}>
+            {privacy} · {formatCount(membersCount)}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.joinButton}
+            onPress={() => onJoin?.(club)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.joinButtonText}>Join</Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </View>
+  );
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => onPress?.(club)}
+      style={styles.card}
+    >
+      {coverImage ? (
+        <ImageBackground
+          source={{ uri: coverImage }}
+          style={styles.background}
+          imageStyle={styles.image}
+        >
+          <CardContent />
+        </ImageBackground>
+      ) : (
+        <View
+          style={[
+            styles.background,
+            {
+              backgroundColor: PLACEHOLDER_COLORS[0],
+            },
+          ]}
+        >
+          <CardContent />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+export default ClubCard;
+
+const styles = StyleSheet.create({
+  card: {
+    width: 220,
+    height: 140,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+
+  background: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+
+  image: {
+    borderRadius: 16,
+  },
+
+  overlay: {
+    padding: 14,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+
+  name: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+
+  meta: {
+    color: '#d1d5db',
+    fontSize: 13,
+    marginTop: 4,
+  },
+
+  joinButton: {
+    marginTop: 10,
+    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+
+  joinButtonText: {
+    color: '#111827',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+});
